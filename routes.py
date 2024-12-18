@@ -1,135 +1,119 @@
 from flask import request, jsonify
 from app import app, db
-from models import User, SerialNumber, Server
-import random, string
+from models import User, Server, UserContainer
+import random
+import string
 
-# 用户注册接口
+# 注册用户接口
 @app.route('/api/register', methods=['POST'])
 def register_user():
-    try:
-        data = request.json
-        username = data.get('username')
-        email = data.get('email')
-        password = data.get('password')
-
-        if not username or not email or not password:
-            return jsonify({"message": "All fields are required", "success": False}), 400
-        if '@' not in email:
-            return jsonify({"message": "Invalid email format", "success": False}), 400
-        if User.query.filter_by(email=email).first():
-            return jsonify({"message": "Email already exists", "success": False}), 400
-
-        user = User(username=username, email=email, password=password)
-        db.session.add(user)
-        db.session.commit()
-        return jsonify({"message": "User registered successfully", "success": True}), 201
-
-    except Exception as e:
-        return jsonify({"message": f"An error occurred: {str(e)}", "success": False}), 500
-
-
-# 生成序列号接口
-@app.route('/api/generate_serial', methods=['POST'])
-def generate_serial():
-    try:
-        data = request.json
-        duration_days = data.get('duration_days')
-        if not duration_days:
-            return jsonify({"message": "Duration days is required", "success": False}), 400
-
-        while True:
-            serial_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-            if not SerialNumber.query.filter_by(code=serial_code).first():
-                break
-
-        serial = SerialNumber(code=serial_code, duration_days=duration_days)
-        db.session.add(serial)
-        db.session.commit()
-        return jsonify({"serial_code": serial_code, "duration_days": duration_days, "success": True})
-
-    except Exception as e:
-        return jsonify({"message": f"An error occurred: {str(e)}", "success": False}), 500
-
-
-# 列出序列号接口
-@app.route('/api/serials', methods=['GET'])
-def list_serials():
-    try:
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 10))
-        status = request.args.get('status')
-
-        query = SerialNumber.query
-        if status:
-            query = query.filter_by(status=status)
-
-        serials = query.paginate(page=page, per_page=per_page, error_out=False)
-        data = [{
-            "code": s.code,
-            "duration": s.duration_days,
-            "status": s.status,
-            "created_at": s.created_at
-        } for s in serials.items]
-
-        return jsonify({
-            "message": "Serial numbers fetched successfully",
-            "success": True,
-            "data": data,
-            "total": serials.total,
-            "pages": serials.pages,
-            "current_page": serials.page,
-        })
-
-    except Exception as e:
-        return jsonify({"message": f"An error occurred: {str(e)}", "success": False}), 500
-
-
-# 将服务器信息（IP 和地区）录入数据库
-
-@app.route('/api/add_server', methods=['POST'])
-def add_server():
     data = request.json
-    ip = data.get('ip')
-    region = data.get('region')
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
 
-    if not ip or not region:
-        return jsonify({"message": "IP and region are required", "success": False}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({"message": "Email already exists"}), 400
 
-    if Server.query.filter_by(ip=ip).first():
-        return jsonify({"message": "Server with this IP already exists", "success": False}), 400
-
-    server = Server(ip=ip, region=region)
-    db.session.add(server)
+    user = User(username=username, email=email, password=password)
+    db.session.add(user)
     db.session.commit()
-    return jsonify({"message": "Server added successfully", "success": True}), 201
-    
-# 获取所有服务器信息
-@app.route('/api/servers', methods=['GET'])
-def list_servers():
-    servers = Server.query.all()
-    data = [{
-        "id": s.id,
-        "ip": s.ip,
-        "region": s.region,
-        "load": s.load,
-        "created_at": s.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-        "updated_at": s.updated_at.strftime('%Y-%m-%d %H:%M:%S')
-    } for s in servers]
-    return jsonify({"message": "Servers fetched successfully", "success": True, "data": data})
+    return jsonify({"message": "User registered successfully"}), 201
 
-# 修改服务器的负载或其他信息
-@app.route('/api/update_server/<int:server_id>', methods=['PUT'])
-def update_server(server_id):
+# 添加用户与服务器的关联关系
+@app.route('/api/add_user_server', methods=['POST'])
+def add_user_server():
     data = request.json
-    load = data.get('load')
+    user_id = data.get('user_id')
+    server_id = data.get('server_id')
 
+    user = User.query.get(user_id)
     server = Server.query.get(server_id)
+
+    if not user or not server:
+        return jsonify({"message": "User or Server not found"}), 404
+
+    if server.load >= 1.0:  # 示例逻辑：负载过高时拒绝分配
+        return jsonify({"message": "Server load is too high to assign to user"}), 400
+
+    user.servers.append(server)
+    db.session.commit()
+
+    return jsonify({"message": "User-Server relationship added successfully"}), 200
+
+# 移除用户与服务器的关联关系
+@app.route('/api/remove_user_server', methods=['POST'])
+def remove_user_server():
+    data = request.json
+    user_id = data.get('user_id')
+    server_id = data.get('server_id')
+
+    user = User.query.get(user_id)
+    server = Server.query.get(server_id)
+
+    if not user or not server:
+        return jsonify({"message": "User or Server not found"}), 404
+
+    user.servers.remove(server)
+    db.session.commit()
+
+    return jsonify({"message": "User-Server relationship removed successfully"}), 200
+
+# 获取用户关联的服务器列表
+@app.route('/api/user_servers/<int:user_id>', methods=['GET'])
+def get_user_servers(user_id):
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    servers = [{"id": server.id, "ip": server.ip, "region": server.region, "load": server.load} for server in user.servers]
+    return jsonify(servers), 200
+
+# 获取服务器关联的用户列表
+@app.route('/api/server_users/<int:server_id>', methods=['GET'])
+def get_server_users(server_id):
+    server = Server.query.get(server_id)
+
     if not server:
-        return jsonify({"message": "Server not found", "success": False}), 404
+        return jsonify({"message": "Server not found"}), 404
 
-    if load is not None:
-        server.load = load
-        db.session.commit()
-        return jsonify({"message": "Server updated successfully", "success": True})
+    users = [{"id": user.id, "username": user.username, "email": user.email} for user in server.users]
+    return jsonify(users), 200
 
-    return jsonify({"message": "No valid fields to update", "success": False}), 400
+# 移除所有与指定服务器关联的用户关系
+@app.route('/api/remove_all_users_from_server/<int:server_id>', methods=['POST'])
+def remove_all_users_from_server(server_id):
+    server = Server.query.get(server_id)
+
+    if not server:
+        return jsonify({"message": "Server not found"}), 404
+
+    users = server.users[:]
+    for user in users:
+        user.servers.remove(server)
+    db.session.commit()
+
+    return jsonify({"message": f"All users removed from server {server_id}"}), 200
+
+# 自动分配服务器给用户（示例业务逻辑）
+@app.route('/api/auto_assign_server', methods=['POST'])
+def auto_assign_server():
+    data = request.json
+    user_id = data.get('user_id')
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    available_servers = Server.query.filter(Server.load < 1.0).all()
+
+    if not available_servers:
+        return jsonify({"message": "No available servers"}), 400
+
+    # 示例：为用户分配负载最低的服务器
+    selected_server = min(available_servers, key=lambda s: s.load)
+    user.servers.append(selected_server)
+    db.session.commit()
+
+    return jsonify({"message": f"Server {selected_server.ip} assigned to user {user.username}"}), 200
