@@ -7,8 +7,7 @@ user_server_association = db.Table(
     'user_server_association',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('server_id', db.Integer, db.ForeignKey('servers.id'), primary_key=True),
-    db.UniqueConstraint('user_id', 'server_id'),
-    __table_args__ = {'extend_existing': True}  # 允许重新定义
+    db.UniqueConstraint('user_id', 'server_id', name='uq_user_server')  # 定义唯一约束
 )
 
 # 用户模型
