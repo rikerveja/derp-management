@@ -117,3 +117,19 @@ def list_servers():
     } for s in servers]
     return jsonify({"message": "Servers fetched successfully", "success": True, "data": data})
 
+# 修改服务器的负载或其他信息
+@app.route('/api/update_server/<int:server_id>', methods=['PUT'])
+def update_server(server_id):
+    data = request.json
+    load = data.get('load')
+
+    server = Server.query.get(server_id)
+    if not server:
+        return jsonify({"message": "Server not found", "success": False}), 404
+
+    if load is not None:
+        server.load = load
+        db.session.commit()
+        return jsonify({"message": "Server updated successfully", "success": True})
+
+    return jsonify({"message": "No valid fields to update", "success": False}), 400
