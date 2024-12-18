@@ -31,6 +31,34 @@ def add_user():
         return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
 
 
+# 添加服务器
+@app.route('/api/add_server', methods=['POST'])
+def add_server():
+    data = request.json
+    ip = data.get('ip')
+    region = data.get('region')
+    load = data.get('load', 0.0)
+
+    # 检查字段是否完整
+    if not ip or not region:
+        return jsonify({"success": False, "message": "Missing required fields"}), 400
+
+    # 检查服务器是否已存在
+    existing_server = Server.query.filter_by(ip=ip).first()
+    if existing_server:
+        return jsonify({"success": False, "message": "Server already exists"}), 400
+
+    # 创建新服务器
+    server = Server(ip=ip, region=region, load=load)
+    db.session.add(server)
+    try:
+        db.session.commit()
+        return jsonify({"success": True, "message": "Server added successfully", "server_id": server.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
+
+
 # 添加用户与服务器的关联关系
 @app.route('/api/add_user_server', methods=['POST'])
 def add_user_server():
