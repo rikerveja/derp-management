@@ -82,3 +82,23 @@ def list_serials():
 
     except Exception as e:
         return jsonify({"message": f"An error occurred: {str(e)}", "success": False}), 500
+
+
+# 将服务器信息（IP 和地区）录入数据库
+
+@app.route('/api/add_server', methods=['POST'])
+def add_server():
+    data = request.json
+    ip = data.get('ip')
+    region = data.get('region')
+
+    if not ip or not region:
+        return jsonify({"message": "IP and region are required", "success": False}), 400
+
+    if Server.query.filter_by(ip=ip).first():
+        return jsonify({"message": "Server with this IP already exists", "success": False}), 400
+
+    server = Server(ip=ip, region=region)
+    db.session.add(server)
+    db.session.commit()
+    return jsonify({"message": "Server added successfully", "success": True}), 201
