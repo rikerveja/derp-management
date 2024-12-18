@@ -6,7 +6,10 @@ from sqlalchemy.sql import func
 user_server_association = db.Table(
     'user_server_association',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id')),
-    db.Column('server_id', db.Integer, db.ForeignKey('servers.id'))
+    db.Column('server_id', db.Integer, db.ForeignKey('servers.id')),
+    db.UniqueConstraint('user_id', 'server_id'),
+    db.MetaData(),
+    __table_args__ = {'extend_existing': True}  # 允许重新定义
 )
 
 # 用户模型
