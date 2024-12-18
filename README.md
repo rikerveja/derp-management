@@ -21,3 +21,12 @@ class Server(db.Model):
     load: 当前服务器负载，浮点数，用于标记服务器的负载情况（例如已分配的用户数或使用率）。
     created_at: 记录服务器添加的时间。
     updated_at: 自动更新记录修改的时间。
+
+
+注意事项
+
+    迁移目录仅需初始化一次：在项目初次使用 Flask-Migrate 时才需要 flask db init。以后不需要重复初始化。
+    模型更新后需重新迁移：如果 models.py 中的模型有任何修改，都需要执行以下命令更新数据库：
+
+flask db migrate -m "Description of changes"
+flask db upgrade
