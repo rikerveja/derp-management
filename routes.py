@@ -3,6 +3,34 @@ from app import app, db
 from models import User, Server, UserContainer
 
 
+# 添加用户
+@app.route('/api/add_user', methods=['POST'])
+def add_user():
+    data = request.json
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+
+    # 检查字段是否完整
+    if not username or not email or not password:
+        return jsonify({"success": False, "message": "Missing required fields"}), 400
+
+    # 检查用户是否已存在
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        return jsonify({"success": False, "message": "User already exists"}), 400
+
+    # 创建新用户
+    user = User(username=username, email=email, password=password)
+    db.session.add(user)
+    try:
+        db.session.commit()
+        return jsonify({"success": True, "message": "User added successfully", "user_id": user.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
+
+
 # 添加用户与服务器的关联关系
 @app.route('/api/add_user_server', methods=['POST'])
 def add_user_server():
