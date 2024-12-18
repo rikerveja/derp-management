@@ -1,24 +1,7 @@
 from flask import request, jsonify
 from app import app, db
 from models import User, Server, UserContainer
-import random
-import string
 
-# 注册用户接口
-@app.route('/api/register', methods=['POST'])
-def register_user():
-    data = request.json
-    username = data.get('username')
-    email = data.get('email')
-    password = data.get('password')
-
-    if User.query.filter_by(email=email).first():
-        return jsonify({"message": "Email already exists"}), 400
-
-    user = User(username=username, email=email, password=password)
-    db.session.add(user)
-    db.session.commit()
-    return jsonify({"message": "User registered successfully"}), 201
 
 # 添加用户与服务器的关联关系
 @app.route('/api/add_user_server', methods=['POST'])
@@ -27,19 +10,23 @@ def add_user_server():
     user_id = data.get('user_id')
     server_id = data.get('server_id')
 
+    # 查询用户和服务器是否存在
     user = User.query.get(user_id)
     server = Server.query.get(server_id)
 
     if not user or not server:
         return jsonify({"message": "User or Server not found"}), 404
 
-    if server.load >= 1.0:  # 示例逻辑：负载过高时拒绝分配
-        return jsonify({"message": "Server load is too high to assign to user"}), 400
+    # 检查关联关系是否已经存在
+    if server in user.servers:
+        return jsonify({"message": "User-Server relationship already exists"}), 400
 
+    # 添加关联
     user.servers.append(server)
     db.session.commit()
 
     return jsonify({"message": "User-Server relationship added successfully"}), 200
+
 
 # 移除用户与服务器的关联关系
 @app.route('/api/remove_user_server', methods=['POST'])
@@ -48,18 +35,25 @@ def remove_user_server():
     user_id = data.get('user_id')
     server_id = data.get('server_id')
 
+    # 查询用户和服务器是否存在
     user = User.query.get(user_id)
     server = Server.query.get(server_id)
 
     if not user or not server:
         return jsonify({"message": "User or Server not found"}), 404
 
+    # 检查关联关系是否存在
+    if server not in user.servers:
+        return jsonify({"message": "User-Server relationship does not exist"}), 400
+
+    # 移除关联
     user.servers.remove(server)
     db.session.commit()
 
     return jsonify({"message": "User-Server relationship removed successfully"}), 200
 
-# 获取用户关联的服务器列表
+
+# 获取用户关联的所有服务器
 @app.route('/api/user_servers/<int:user_id>', methods=['GET'])
 def get_user_servers(user_id):
     user = User.query.get(user_id)
@@ -67,53 +61,76 @@ def get_user_servers(user_id):
     if not user:
         return jsonify({"message": "User not found"}), 404
 
-    servers = [{"id": server.id, "ip": server.ip, "region": server.region, "load": server.load} for server in user.servers]
-    return jsonify(servers), 200
+    servers = [
+        {"id": server.id, "ip": server.ip, "region": server.region, "load": server.load}
+        for server in user.servers
+    ]
+    return jsonify({"user_id": user.id, "servers": servers}), 200
 
-# 获取服务器关联的用户列表
-@app.route('/api/server_users/<int:server_id>', methods=['GET'])
-def get_server_users(server_id):
-    server = Server.query.get(server_id)
 
-    if not server:
-        return jsonify({"message": "Server not found"}), 404
-
-    users = [{"id": user.id, "username": user.username, "email": user.email} for user in server.users]
-    return jsonify(users), 200
-
-# 移除所有与指定服务器关联的用户关系
-@app.route('/api/remove_all_users_from_server/<int:server_id>', methods=['POST'])
-def remove_all_users_from_server(server_id):
-    server = Server.query.get(server_id)
-
-    if not server:
-        return jsonify({"message": "Server not found"}), 404
-
-    users = server.users[:]
-    for user in users:
-        user.servers.remove(server)
-    db.session.commit()
-
-    return jsonify({"message": f"All users removed from server {server_id}"}), 200
-
-# 自动分配服务器给用户（示例业务逻辑）
-@app.route('/api/auto_assign_server', methods=['POST'])
-def auto_assign_server():
+# 添加用户容器
+@app.route('/api/add_user_container', methods=['POST'])
+def add_user_container():
     data = request.json
     user_id = data.get('user_id')
+    server_id = data.get('server_id')
+    port = data.get('port')
+    stun_port = data.get('stun_port')
+
+    # 查询用户和服务器是否存在
+    user = User.query.get(user_id)
+    server = Server.query.get(server_id)
+
+    if not user or not server:
+        return jsonify({"message": "User or Server not found"}), 404
+
+    # 检查端口是否冲突
+    existing_container = UserContainer.query.filter_by(server_id=server_id, port=port).first()
+    if existing_container:
+        return jsonify({"message": "Port already in use on this server"}), 400
+
+    # 创建并添加容器
+    container = UserContainer(user_id=user_id, server_id=server_id, port=port, stun_port=stun_port)
+    db.session.add(container)
+    db.session.commit()
+
+    return jsonify({"message": "User container added successfully"}), 200
+
+
+# 移除用户容器
+@app.route('/api/remove_user_container', methods=['POST'])
+def remove_user_container():
+    data = request.json
+    container_id = data.get('container_id')
+
+    # 查询容器是否存在
+    container = UserContainer.query.get(container_id)
+
+    if not container:
+        return jsonify({"message": "Container not found"}), 404
+
+    # 删除容器
+    db.session.delete(container)
+    db.session.commit()
+
+    return jsonify({"message": "User container removed successfully"}), 200
+
+
+# 获取用户的所有容器
+@app.route('/api/user_containers/<int:user_id>', methods=['GET'])
+def get_user_containers(user_id):
     user = User.query.get(user_id)
 
     if not user:
         return jsonify({"message": "User not found"}), 404
 
-    available_servers = Server.query.filter(Server.load < 1.0).all()
-
-    if not available_servers:
-        return jsonify({"message": "No available servers"}), 400
-
-    # 示例：为用户分配负载最低的服务器
-    selected_server = min(available_servers, key=lambda s: s.load)
-    user.servers.append(selected_server)
-    db.session.commit()
-
-    return jsonify({"message": f"Server {selected_server.ip} assigned to user {user.username}"}), 200
+    containers = [
+        {
+            "id": container.id,
+            "server_id": container.server_id,
+            "port": container.port,
+            "stun_port": container.stun_port,
+        }
+        for container in user.containers
+    ]
+    return jsonify({"user_id": user.id, "containers": containers}), 200
