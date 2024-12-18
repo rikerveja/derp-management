@@ -33,7 +33,9 @@ class SerialNumber(db.Model):
 # 服务器模型
 class Server(db.Model):
     __tablename__ = 'servers'
-    id = db.Column(db.Integer, primary_key=True)
-    ip = db.Column(db.String(255), unique=True, nullable=False)
-    region = db.Column(db.String(100), nullable=False)
-    load = db.Column(db.Float, default=0.0)
+    id = db.Column(db.Integer, primary_key=True)  # 唯一标识符
+    ip = db.Column(db.String(255), unique=True, nullable=False)  # 服务器 IP 地址
+    region = db.Column(db.String(100), nullable=False)  # 服务器地区，如 "Shanghai"
+    load = db.Column(db.Float, default=0.0)  # 当前服务器负载
+    created_at = db.Column(db.DateTime, default=func.now())  # 创建时间
+    updated_at = db.Column(db.DateTime, default=func.now(), onupdate=func.now())  # 更新时间
