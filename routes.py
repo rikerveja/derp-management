@@ -102,3 +102,18 @@ def add_server():
     db.session.add(server)
     db.session.commit()
     return jsonify({"message": "Server added successfully", "success": True}), 201
+    
+# 获取所有服务器信息
+@app.route('/api/servers', methods=['GET'])
+def list_servers():
+    servers = Server.query.all()
+    data = [{
+        "id": s.id,
+        "ip": s.ip,
+        "region": s.region,
+        "load": s.load,
+        "created_at": s.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        "updated_at": s.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+    } for s in servers]
+    return jsonify({"message": "Servers fetched successfully", "success": True, "data": data})
+
